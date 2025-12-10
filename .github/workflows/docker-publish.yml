@@ -41,4 +41,4 @@ jobs:
           context: .
           push: true
           # 这里使用了上面转换好的小写变量 LOWERCASE_REPO
-          tags: ${{ env.REGISTRY }}/${{ env.LOWERCASE_REPO }}:4
+          tags: ${{ env.REGISTRY }}/${{ env.LOWERCASE_REPO }}:5
