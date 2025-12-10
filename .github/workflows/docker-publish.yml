@@ -6,7 +6,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build:
@@ -18,6 +17,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+
+      # === 关键修正步骤：将仓库名强制转为小写 ===
+      # Docker 镜像名不支持大写，这里自动转换防止报错
+      - name: Lowercase Image Name
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
       - name: Log in to the Container registry
         uses: docker/login-action@v2
@@ -31,4 +36,5 @@ jobs:
         with:
           context: .
           push: true
+          # 这里使用了上面转换好的小写变量 env.IMAGE_NAME
           tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
