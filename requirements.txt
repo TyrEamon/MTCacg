@@ -1,5 +1,6 @@
 aiogram>=3.0.0
-pixivpy3
 aiohttp
 boto3
+python-dotenv
+pixivpy3
 schedule
