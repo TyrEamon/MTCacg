@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 
 # --- 1. 变量读取函数 (兼容空格/下划线) ---
 def get_env(key, default=None):
-    # 优先读标准key，读不到就读把下划线换成空格的key
     val = os.getenv(key) or os.getenv(key.replace("_", " "))
     if val: return val.strip()
     return default
@@ -37,7 +36,7 @@ CHANNEL_ID = get_env("CHANNEL_ID")
 # Cloudflare 相关
 CF_ACCOUNT_ID = get_env("CLOUDFLARE_ACCOUNT_ID") or get_env("CF_ACCOUNT_ID")
 CF_API_TOKEN = get_env("CLOUDFLARE_API_TOKEN") or get_env("CF_API_TOKEN")
-D1_DB_ID = get_env("D1_DATABASE_ID") # 你的 D1 ID 就在这里读取
+D1_DB_ID = get_env("D1_DATABASE_ID")
 
 # R2 相关
 R2_ACCESS_KEY = get_env("R2_ACCESS_KEY_ID")
@@ -45,13 +44,14 @@ R2_SECRET_KEY = get_env("R2_SECRET_ACCESS_KEY")
 R2_BUCKET = get_env("R2_BUCKET_NAME")
 
 # Pixiv 相关
-PIXIV_PHPSESSID = get_env("PIXIV_PHPSESSID") # 你的 PHPSESSID
+PIXIV_PHPSESSID = get_env("PIXIV_PHPSESSID")
 PIXIV_REFRESH_TOKEN = get_env("PIXIV_REFRESH_TOKEN")
-PIXIV_ARTIST_IDS = get_env("PIXIV_ARTIST_IDS", "") # 你的画师列表
+PIXIV_ARTIST_IDS = get_env("PIXIV_ARTIST_IDS", "")
 PIXIV_LIMIT = int(get_env("PIXIV_LIMIT", 3))
 
 # Yande 相关
 YANDE_LIMIT = int(get_env("YANDE_LIMIT", 1))
+YANDE_TAGS = get_env("YANDE_TAGS", "order:random") # 默认 random, 支持 order:score
 
 # --- 3. 启动检查 ---
 required_vars = [BOT_TOKEN, CHANNEL_ID, CF_ACCOUNT_ID, R2_ACCESS_KEY, R2_SECRET_KEY, R2_BUCKET, D1_DB_ID]
@@ -82,7 +82,6 @@ async def save_to_d1(post_id, file_name, caption, tags, source):
     url = f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/d1/database/{D1_DB_ID}/query"
     headers = {"Authorization": f"Bearer {CF_API_TOKEN}", "Content-Type": "application/json"}
     
-    # 依然使用 INSERT OR IGNORE 防止重复报错
     sql = "INSERT OR IGNORE INTO images (id, file_name, caption, tags, created_at) VALUES (?, ?, ?, ?, ?)"
     params = [str(post_id), file_name, caption, tags, int(time.time())]
     
@@ -98,8 +97,13 @@ async def process_image(img_buffer, post_id, tags, caption, source):
     try:
         file_name = f"{source}_{post_id}.jpg"
         
-        # 1. 发送 TG (关键：使用 BufferedInputFile 修复文件名问题)
-        tg_file = BufferedInputFile(img_buffer.getvalue(), filename=file_name)
+        # 修复点：确保指针在开头
+        img_buffer.seek(0)
+        file_bytes = img_buffer.read()
+        img_buffer.seek(0) # 重置给 R2 用
+        
+        # 1. 发送 TG
+        tg_file = BufferedInputFile(file_bytes, filename=file_name)
         await bot.send_photo(chat_id=int(CHANNEL_ID), photo=tg_file, caption=caption)
         logger.info(f"✅ TG 发送成功: {post_id}")
         
@@ -115,29 +119,29 @@ async def process_image(img_buffer, post_id, tags, caption, source):
 # --- 5. 爬虫逻辑 ---
 
 async def fetch_pixiv():
-    """Pixiv 抓取逻辑 (优先使用 PHPSESSID 和 ARTIST_IDS)"""
+    """Pixiv 抓取逻辑 (PHPSESSID 补丁版)"""
     if not HAS_PIXIV: return
 
     logger.info("🔍 正在检查 Pixiv...")
     api = AppPixivAPI()
     
-    # --- 登录逻辑 ---
+    # --- 登录逻辑 (增强版) ---
     try:
         if PIXIV_REFRESH_TOKEN:
             api.auth(refresh_token=PIXIV_REFRESH_TOKEN)
-            logger.info("✅ Pixiv: 使用 Refresh Token 登录成功")
+            logger.info("✅ Pixiv: Token 登录成功")
         elif PIXIV_PHPSESSID:
-            # 使用 PHPSESSID 这种方式其实是模拟网页请求，pixivpy3 原生不支持直接传 cookie 给 auth
-            # 但我们可以直接给 requests session 设置 cookie
-            api.requests_kwargs.update({'headers': {'User-Agent': 'PixivAndroidApp/5.0.155'}})
-            # 这是一个 hack，通常 pixivpy3 需要 token。
-            # 如果你只有 PHPSESSID，建议使用 requests 直接爬，或者寻找支持 cookie 的库。
-            # 但既然你用了 pixivpy3，我们假设你的 PHPSESSID 能用在 header 里。
-            # 注意：pixivpy3 强依赖 OAuth token，仅有 cookie 可能无法调用所有 API。
-            # 暂时尝试直接调用，如果报错，说明 pixivpy3 必须要有 token。
-            logger.warning("⚠️ Pixiv: 仅检测到 PHPSESSID，API 调用可能受限。强烈建议获取 Refresh Token。")
+            # 🔴 PHPSESSID 补丁: 强行注入 Cookie
+            # 注意: pixivpy3 原生不支持这样，我们这里只是尝试让它带上头
+            # 如果这步失败，说明 pixivpy3 彻底不支持纯 cookie，必须换库
+            api.requests_kwargs.update({
+                'headers': {
+                    'User-Agent': 'PixivAndroidApp/5.0.155',
+                    'Cookie': f'PHPSESSID={PIXIV_PHPSESSID};'
+                }
+            })
+            logger.info("⚠️ Pixiv: 尝试使用 PHPSESSID 模式 (可能不稳定)")
         else:
-            logger.warning("⚠️ Pixiv: 未配置 Token 或 Cookie，跳过。")
             return
     except Exception as e:
         logger.error(f"Pixiv 登录异常: {e}")
@@ -146,68 +150,82 @@ async def fetch_pixiv():
     # --- 抓取逻辑 ---
     target_illusts = []
 
-    # 1. 优先抓取指定画师
+    # 1. 抓取指定画师
     if PIXIV_ARTIST_IDS:
         artist_ids = [x.strip() for x in PIXIV_ARTIST_IDS.split(',') if x.strip()]
         logger.info(f"🎨 正在抓取指定画师: {artist_ids}")
         for uid in artist_ids:
             try:
-                # 注意：如果仅有 cookie，这一步可能会 401 Unauthorized
+                # 尝试抓取
                 json_result = api.user_illusts(uid)
-                if 'illusts' in json_result:
+                if json_result and 'illusts' in json_result:
                     target_illusts.extend(json_result.illusts[:PIXIV_LIMIT])
+                else:
+                    logger.warning(f"画师 {uid} 未返回数据 (可能是 Cookie 失效)")
             except Exception as e:
                 logger.error(f"画师 {uid} 抓取失败: {e}")
     else:
-        # 2. 否则抓取推荐
-        logger.info("🎨 正在抓取推荐榜单")
+        # 2. 抓取推荐
         try:
             json_result = api.illust_recommended(content_type="illust")
-            if 'illusts' in json_result:
+            if json_result and 'illusts' in json_result:
                 target_illusts.extend(json_result.illusts[:PIXIV_LIMIT])
         except Exception as e:
             logger.error(f"推荐榜单抓取失败: {e}")
 
     # --- 处理图片 ---
-    headers = {"Referer": "https://www.pixiv.net/"}
+    # Pixiv 图片有防盗链，必须带 Referer
+    headers = {"Referer": "https://app-api.pixiv.net/"} 
+    
     for illust in target_illusts:
         pid = illust.id
-        img_url = illust.image_urls.large
+        # 优先拿大图
+        img_url = illust.image_urls.large if illust.image_urls.large else illust.image_urls.medium
+        
         tags = " ".join([t.name for t in illust.tags])
         caption = f"Pixiv ID: {pid}\nArtist: {illust.user.name}\nTags: #{tags.replace(' ', ' #')}"
         
-        # 下载
+        # 下载 (注意：这里不能用 pixivpy 下载，得用 aiohttp 带 header 下载)
         async with aiohttp.ClientSession() as session:
             async with session.get(img_url, headers=headers) as resp:
                 if resp.status == 200:
                     img_bytes = await resp.read()
                     await process_image(BytesIO(img_bytes), pid, tags, caption, "pixiv")
+                else:
+                    logger.warning(f"Pixiv 图片下载失败 {resp.status}: {img_url}")
         
         await asyncio.sleep(2)
 
 async def fetch_yande():
-    """Yande 抓取逻辑"""
-    logger.info(f"🔍 正在检查 Yande (Limit: {YANDE_LIMIT})...")
-    url = f"https://yande.re/post.json?limit={YANDE_LIMIT}&tags=order:random"
+    """Yande 抓取逻辑 (支持自定义 Tags)"""
+    logger.info(f"🔍 正在检查 Yande (Tags: {YANDE_TAGS})...")
+    url = f"https://yande.re/post.json?limit={YANDE_LIMIT}&tags={YANDE_TAGS}"
     
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as resp:
-            if resp.status != 200: return
-            posts = await resp.json()
-            
-            for post in posts:
-                img_url = post.get('sample_url') or post.get('file_url')
-                if not img_url: continue
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as resp:
+                if resp.status != 200: return
+                posts = await resp.json()
                 
-                pid = post.get('id')
-                tags = post.get('tags', '')
-                caption = f"Yande ID: {pid}\nTags: #{tags.replace(' ', ' #')}"
-                
-                async with session.get(img_url) as img_resp:
-                    if img_resp.status == 200:
-                        img_bytes = await img_resp.read()
-                        await process_image(BytesIO(img_bytes), pid, tags, caption, "yande")
-                await asyncio.sleep(2)
+                if not posts:
+                    logger.info("⚠️ Yande 无数据")
+                    return
+
+                for post in posts:
+                    img_url = post.get('sample_url') or post.get('file_url')
+                    if not img_url: continue
+                    
+                    pid = post.get('id')
+                    tags = post.get('tags', '')
+                    caption = f"Yande ID: {pid}\nTags: #{tags.replace(' ', ' #')}"
+                    
+                    async with session.get(img_url) as img_resp:
+                        if img_resp.status == 200:
+                            img_bytes = await img_resp.read()
+                            await process_image(BytesIO(img_bytes), pid, tags, caption, "yande")
+                    await asyncio.sleep(2)
+    except Exception as e:
+        logger.error(f"Yande 出错: {e}")
 
 # --- 6. 主循环 ---
 async def main():
