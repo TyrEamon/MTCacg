@@ -1,8 +1,12 @@
 name: Docker Image CI
 
+# 触发条件：
+# 1. 推送到 main 分支时自动触发
+# 2. 手动在 GitHub Actions 页面点击 "Run workflow" 按钮触发
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -18,11 +22,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # === 关键修正步骤：将仓库名强制转为小写 ===
-      # Docker 镜像名不支持大写，这里自动转换防止报错
-      - name: Lowercase Image Name
+      # === 核心修正：把仓库名(含用户名)强制转为小写 ===
+      # 例如：MyUser/MyRepo -> myuser/myrepo
+      - name: Lowercase Repository Name
         run: |
-          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+          echo "LOWERCASE_REPO=${GITHUB_REPOSITORY,,}" >> ${GITHUB_ENV}
 
       - name: Log in to the Container registry
         uses: docker/login-action@v2
@@ -36,5 +40,5 @@ jobs:
         with:
           context: .
           push: true
-          # 这里使用了上面转换好的小写变量 env.IMAGE_NAME
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          # 这里使用了上面转换好的小写变量 LOWERCASE_REPO
+          tags: ${{ env.REGISTRY }}/${{ env.LOWERCASE_REPO }}:latest
