@@ -177,8 +177,7 @@ async def fetch_yande():
                     # Yande 一般不需要像 Pixiv 那样严格去重，因为 Random 是随机的
                     # 如果需要去重，也可以在这里加判断逻辑
                     
-                    caption = f"Yande: {post['id']}
-Tags: #{post.get('tags','').replace(' ', ' #')}"
+                    caption = f"Yande: {post['id']}\nTags: #{post.get('tags','').replace(' ', ' #')}"
                     
                     async with session.get(img_url) as r:
                         if r.status == 200:
@@ -231,9 +230,7 @@ async def fetch_pixiv_by_cookie(artist_ids):
                         tags = " ".join([t['tag'] for t in body['tags']['tags']])
                         img_url = body['urls']['original']
                         
-                        caption = f"Pixiv: {title}
-Artist: {user}
-Tags: #{tags.replace(' ', ' #')}"
+                        caption = f"Pixiv: {title}\nArtist: {user}\nTags: #{tags.replace(' ', ' #')}"
                         post_id = f"pixiv_{pid}"
                         
                         # 下载原图
