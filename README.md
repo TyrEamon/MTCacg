@@ -6,7 +6,22 @@
   <h3>采集 · 整理 · 展示</h3>
   <p>一个基于 Cloudflare Workers 和 Telegram Bot 的二次元插画聚合与展示平台。</p>
 </div>
-
+<div align="center">
+  <table>
+    <tr>
+      <!-- 📱 左侧：手机端截图 (占宽 30%) -->
+      <td width="30%" align="center" valign="top">
+        <img src="https://pub-d07d03b8c35d40309ce9c6d8216e885b.r2.dev/phone.jpg" alt="Mobile View" width="100%" style="border-radius: 10px;">
+      </td>
+      <!-- 💻 右侧：电脑端截图 (占宽 70%) -->
+      <td width="70%" align="center" valign="top">
+        <img src="https://pub-d07d03b8c35d40309ce9c6d8216e885b.r2.dev/1765473925321.png" alt="Desktop Home" width="100%" style="border-radius: 10px; margin-bottom: 10px;">
+        <img src="https://pub-d07d03b8c35d40309ce9c6d8216e885b.r2.dev/1765474149513.png" alt="Desktop Detail" width="100%" style="border-radius: 10px; margin-bottom: 10px;">
+        <img src="https://pub-d07d03b8c35d40309ce9c6d8216e885b.r2.dev/1765474175927.png" alt="Desktop About" width="100%" style="border-radius: 10px;">
+      </td>
+    </tr>
+  </table>
+</div>
 ---
 
 ## 📖 项目简介 | Introduction
