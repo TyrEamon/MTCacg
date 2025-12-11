@@ -158,35 +158,64 @@ async def handle_manual_forward(message: Message):
         await message.reply("❌ 收录失败，请检查日志")
 
 # ===========================
-# 🕸️ 功能 2: Yande 爬虫
+# 🕸️ 功能 2: Yande 爬虫 (已修复去重)
 # ===========================
 async def fetch_yande():
     logger.info(f"🔍 检查 Yande ({YANDE_TAGS})...")
     url = f"https://yande.re/post.json?limit={YANDE_LIMIT}&tags={YANDE_TAGS}"
+    
+    # 标记本轮是否有新图 (用于触发最后上传云端)
+    has_new_images = False 
+    
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 if resp.status != 200: return
                 posts = await resp.json()
                 
+                # Yande 的 API 是按时间倒序的（最新的在前面）
+                # 为了防止顺序错乱，我们通常可以倒序处理，或者直接遍历
                 for post in posts:
+                    # --- 1. ID 构造 ---
+                    # 必须和 Pixiv 保持不一样的格式前缀，防止 ID 撞车
+                    # 比如 Pixiv 是 "12345"，Yande 最好存成 "yande_12345"
+                    yande_id_key = f"yande_{post['id']}"
+                    
+                    # --- 2. 去重检查 ---
+                    if yande_id_key in sent_illust_ids:
+                        logger.info(f"⏭️ Yande {post['id']} 以前发过，跳过。")
+                        continue
+
                     img_url = post.get('sample_url') or post.get('file_url')
                     if not img_url: continue
                     
-                    pid = f"yande_{post['id']}"
-                    # Yande 一般不需要像 Pixiv 那样严格去重，因为 Random 是随机的
-                    # 如果需要去重，也可以在这里加判断逻辑
+                    # 构造 D1 用的 ID (和上面的去重 Key 保持一致比较好管理)
+                    pid = yande_id_key 
                     
-                    caption = f"Yande: {post['id']}\nTags: #{post.get('tags','').replace(' ', ' #')}"
+                    # R18 检查
+                    raw_tags = post.get('tags', '')
+                    if post.get('rating') == 'e':
+                        raw_tags += " R-18"
+
+                    caption = f"Yande: {post['id']}\nTags: #{raw_tags.replace(' ', ' #')}"
                     
+                    # --- 3. 发送图片 ---
                     async with session.get(img_url) as r:
                         if r.status == 200:
-                            await process_image(await r.read(), pid, post.get('tags',''), caption, "yande")
+                            # 你的核心发送函数
+                            await process_image(await r.read(), pid, raw_tags, caption, "yande")
+                            
+                            # --- 4. 成功后记录到内存 ---
+                            sent_illust_ids.add(yande_id_key)
+                            has_new_images = True
                     
                     await asyncio.sleep(2)
     except Exception as e:
         logger.error(f"Yande 爬虫出错: {e}")
 
+    # --- 5. 如果有新图，同步回 Cloudflare Worker ---
+    if has_new_images:
+        await push_history_to_cloud()
 # ===========================
 # 🎨 功能 3: Pixiv 爬虫 (带去重)
 # ===========================
