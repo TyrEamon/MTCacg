@@ -47,7 +47,7 @@ export default {
     }
 
     if (path.match(/^\/detail\/(.+)$/)) return await handleDetail(path.match(/^\/detail\/(.+)$/)[1], env);
-    if (path === '/about') return new Response(htmlAbout(), {headers: {'Content-Type': 'text/html'}});
+    if (path === '/about') return new Response(htmlAbout(), {headers: {'Content-Type': 'text/html;charset=UTF-8'}});
     
     return new Response(htmlHome(), { headers: { 'Content-Type': 'text/html;charset=UTF-8' }});
   }
@@ -67,25 +67,40 @@ async function proxyTelegramImage(fileId, botToken) {
 }
 
 const SIDEBAR_HTML = `
-  <div id="overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 hidden transition-opacity opacity-0" style="will-change: opacity;"></div>
-  <aside id="sidebar" class="fixed top-0 left-0 w-72 h-full bg-[#1a1a1a]/95 backdrop-blur-xl border-r border-white/10 z-50 transform -translate-x-full transition-transform duration-300 ease-out shadow-2xl flex flex-col" style="will-change: transform;">
+  <div id="overlay" onclick="toggleSidebar()" class="fixed inset-0 bg-black/60 z-40 hidden transition-opacity opacity-0" style="will-change: opacity;"></div>
+  <aside id="sidebar" class="fixed top-0 left-0 w-72 h-full bg-[#1a1a1a]/95 border-r border-white/10 z-50 transform -translate-x-full transition-transform duration-300 ease-out shadow-2xl flex flex-col" style="will-change: transform;">
     <div class="p-6 border-b border-white/10 flex items-center justify-between">
       <h2 class="text-2xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">MtcACG</h2>
       <button onclick="toggleSidebar()" class="text-gray-400 hover:text-white">✕</button>
     </div>
     <nav class="flex-1 p-4 space-y-2">
-      <a href="/" class="flex items-center p-3 text-gray-300 hover:bg-white/10 rounded-lg transition">
-        <span class="mr-3">🏠</span> Home
-      </a>
-      <a href="#" onclick="randomImage()" class="flex items-center p-3 text-gray-300 hover:bg-white/10 rounded-lg transition">
-        <span class="mr-3">🎲</span> Random Pick
-      </a>
-      <a href="/about" class="flex items-center p-3 text-gray-300 hover:bg-white/10 rounded-lg transition">
-        <span class="mr-3">ℹ️</span> About
-      </a>
+    <!-- 首页 -->
+    <a href="/" class="flex items-center p-3 text-gray-300 hover:bg-white/10 rounded-lg transition">
+      <svg class="w-5 h-5 mr-3 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M3 11.5L12 4l9 7.5M5 10.5V20h5v-5h4v5h5v-9.5" />
+      </svg>
+      <span>首页</span>
+    </a>
+    
+    <!-- 随机抽图 -->
+    <a href="#" onclick="randomImage()" class="flex items-center p-3 text-gray-300 hover:bg-white/10 rounded-lg transition">
+      <svg class="w-5 h-5 mr-3 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h4l3 6 3-6h4M4 18h4l3-6 3 6h4" />
+      </svg>
+      <span>随机抽图看看0w0</span>
+    </a>
+    
+    <!-- 关于 -->
+    <a href="/about" class="flex items-center p-3 text-gray-300 hover:bg-white/10 rounded-lg transition">
+      <svg class="w-5 h-5 mr-3 text-gray-300" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9" stroke-linecap="round" stroke-linejoin="round" />
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8.5v.01M11 11h1v5h1" />
+      </svg>
+      <span>关于本站</span>
+    </a>    
       <div class="pt-4 mt-4 border-t border-white/10">
         <div class="flex items-center justify-between p-3">
-          <span class="text-gray-300 flex items-center"><span class="mr-3">🔞</span> R-18 Filter</span>
+          <span class="text-gray-300 flex items-center"><span class="mr-3">🔞</span> R18 哒咩~</span>
           <label class="relative inline-flex items-center cursor-pointer">
             <input type="checkbox" id="r18-toggle" class="sr-only peer" onchange="toggleR18(this)">
             <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-600"></div>
@@ -94,7 +109,7 @@ const SIDEBAR_HTML = `
       </div>
       <div class="pt-4 mt-4 border-t border-white/10">
         <p class="px-3 text-xs font-bold text-gray-500 uppercase mb-2">Friends</p>
-        <a href="https://github.com" target="_blank" class="flex items-center p-3 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg text-sm">
+        <a href="https://github.com/TyrEamon/MTCacg" target="_blank" class="flex items-center p-3 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg text-sm">
            🔗 GitHub
         </a>
       </div>
@@ -148,6 +163,7 @@ async function handleDetail(id, env) {
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${title} - MtcACG</title>
+<link rel="icon" type="image/png" href="https://pub-d07d03b8c35d40309ce9c6d8216e885b.r2.dev/ACGg.png">
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
   .tag-pill { background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 20px; font-size: 12px; color: #f9a8d4; transition: all 0.2s; }
@@ -205,6 +221,7 @@ function htmlHome() {
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MtcACG</title>
+<link rel="icon" type="image/png" href="https://pub-d07d03b8c35d40309ce9c6d8216e885b.r2.dev/ACGg.png">
 <style>
 body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #121212; color: #fff; overflow-x: hidden; }
 
@@ -214,7 +231,7 @@ body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; 
   background-size: cover; background-position: center; 
   /* 优化1：模糊度调低，减轻显卡负担 */
-  filter: blur(15px) brightness(0.5); 
+  filter: blur(6px) brightness(0.6); 
   transition: opacity 1s; opacity: 0; 
   /* 开启硬件加速 */
   transform: translate3d(0,0,0); 
@@ -341,7 +358,7 @@ ${SIDEBAR_HTML}
   <div class="menu-btn" onclick="toggleSidebar()">
     <svg width="24" height="24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
   </div>
-  <div class="search-bar"><input type="text" id="search" placeholder="Search..." onchange="doSearch(this.value)"></div>
+  <div class="search-bar"><input type="text" id="search" placeholder=" 要搜索什么吖...." onchange="doSearch(this.value)"></div>
   <a href="/" class="logo">MtcACG</a>
 </div>
 <!-- 📱手机瀑布流 + 💻电脑砖墙 -->
@@ -391,18 +408,127 @@ load();
 }
 
 function htmlAbout() {
-    return `
-    <!DOCTYPE html>
-    <html class="dark">
-    <head><meta name="viewport" content="width=device-width"><script src="https://cdn.tailwindcss.com"></script></head>
-    <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
-      ${SIDEBAR_HTML}
-      <div class="max-w-md w-full bg-gray-800 p-8 rounded-2xl shadow-2xl text-center relative border border-gray-700">
-         <button onclick="toggleSidebar()" class="absolute top-4 left-4 text-gray-400">☰</button>
-         <h1 class="text-3xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent mb-4">MtcACG</h1>
-         <p class="text-gray-300 mb-6">A personal gallery collection.</p>
-         <a href="/" class="mt-8 inline-block px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-full transition">Back Home</a>
-      </div>
-    </body>
-    </html>`;
+  return `
+  <!DOCTYPE html>
+  <html class="dark">
+  <head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌸</text></svg>">
+    <style>
+      /* 动态背景 */
+      #bg-layer { 
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; 
+        background-size: cover; background-position: center; 
+        filter: blur(3px) brightness(0.6); 
+        transition: opacity 1s; opacity: 0; 
+        transform: translate3d(0,0,0); will-change: opacity; pointer-events: none;
+      }
+      
+      /* 隐藏滚动条但允许滚动 */
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      
+      /* 玻璃板内的文字排版 */
+      .content-box h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem; color: #fff; border-left: 4px solid #ec4899; padding-left: 12px; margin-top: 2rem; }
+      .content-box p { margin-bottom: 1rem; line-height: 1.7; color: #e5e7eb; }
+      .content-box code { background: rgba(255,255,255,0.15); padding: 2px 6px; border-radius: 4px; font-family: monospace; color: #f9a8d4; }
+      .content-box a { color: #f472b6; text-decoration: underline; text-underline-offset: 4px; transition: color 0.2s; }
+      .content-box a:hover { color: #fff; }
+    </style>
+  </head>
+  <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
+    <div id="bg-layer"></div>
+    ${SIDEBAR_HTML}
+    
+    <!-- 🟢 玻璃板容器：bg-black/30 (更透明), backdrop-blur-md (磨砂感) -->
+    <div class="max-w-2xl w-full bg-black/20 backdrop-blur-md p-6 rounded-2xl shadow-2xl relative border border-white/10 content-box h-[85vh] overflow-y-auto no-scrollbar">
+       
+       <!-- 顶部栏 (透明背景) -->
+       <div class="flex items-center justify-between mb-6 sticky top-0 z-10 py-2 border-b border-white/10" style="background: rgba(0,0,0,0.01); backdrop-filter: blur(1px);">
+         <div class="flex items-center gap-4">
+           <button onclick="toggleSidebar()" class="text-gray-300 hover:text-white transition p-1">☰</button>
+           <h1 class="text-2xl font-bold bg-gradient-to-r from-pink-500 to-purple-500 bg-clip-text text-transparent">关于 MtcACG</h1>
+         </div>
+         <a href="/" class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-full transition border border-white/5">回到首页</a>
+       </div>
+
+       <!-- 序言 -->
+       <section>
+         <h2 class="text-xl font-medium text-white mb-3 flex items-center">
+           <span class="w-1 h-6 bg-pink-500 rounded-full mr-3 opacity-80"></span>
+           序言 · Prologue
+         </h2>
+         <p>
+           在互联网的浩瀚烟海中，MtcACG 只是一个静谧的角落。
+         </p>
+         <p class="mt-2">
+           这里没有喧嚣的爬虫，没有算法的裹挟。每一张图片，都来自我个人的凝视与收藏。它们或许是某个深夜的惊鸿一瞥，或许是某段记忆的色彩切片。我将它们安放于此，像是在数字世界里搭建了一座私人的空中花园。
+         </p>
+       </section>
+     
+       <!-- 功能 -->
+       <section>
+         <h2 class="text-xl font-medium text-white mb-3 flex items-center">
+           <span class="w-1 h-6 bg-purple-500 rounded-full mr-3 opacity-80"></span>
+           探索 · Explore
+         </h2>
+         <p>
+           你可以通过 <code>#标签</code> 追寻线索，或是在 <code>瀑布流</code> 中随波逐流。
+           这里还藏着一把通往里世界的钥匙 —— 点击左上角菜单，你可以开启或关闭 <strong>R-18 滤镜</strong>。请在这个静谧的空间里，保持一份得体的优雅。
+         </p>
+       </section>
+     
+       <!-- 接口 -->
+       <section>
+         <h2 class="text-xl font-medium text-white mb-3 flex items-center">
+           <span class="w-1 h-6 bg-blue-500 rounded-full mr-3 opacity-80"></span>
+           联结 · Connect
+         </h2>
+         <p>
+           如果你也是一位孤独的收集者，想要与这座花园建立某种数字联结，我留下了一个简单的接口：
+           <br>
+           <code class="text-sm bg-white/5 px-2 py-1 rounded mt-2 inline-block font-mono text-pink-300">/api/posts?q=random</code>
+           <br>
+           它会随机赠予你一张此时此刻的风景。
+         </p>
+       </section>
+     
+       <!-- 尾声 -->
+       <section>
+         <h2 class="text-xl font-medium text-white mb-3 flex items-center">
+           <span class="w-1 h-6 bg-gray-500 rounded-full mr-3 opacity-80"></span>
+           寄语 · Epilogue
+         </h2>
+         <p>
+           如果你在这里找到了共鸣，或是有话想对我说，欢迎通过 <a href="https://t.me/yourname" class="text-pink-400 hover:text-white transition-colors border-b border-pink-400/30 hover:border-white pb-0.5">Telegram</a> 投递信件。
+         </p>
+         <p class="mt-4 text-sm opacity-60">
+           愿你在这里，捡拾到属于你的那一片颜料。
+         </p>
+       </section>
+
+       <div class="mt-12 pt-8 border-t border-white/10 text-center text-xs text-gray-400">
+         © 2025 MtcACG Gallery | Powered by Cloudflare Workers
+       </div>
+
+    </div>
+
+    <script>
+      (async function() {
+        try {
+          const res = await fetch('/api/posts?q=random');
+          const data = await res.json();
+          if (data.length > 0) {
+            const bg = document.getElementById('bg-layer');
+            bg.style.backgroundImage = \`url(/image/\${data[0].file_name})\`;
+            bg.style.opacity = 1;
+          }
+        } catch(e) {}
+      })();
+    </script>
+  </body>
+  </html>`;
 }
+
+
