@@ -269,7 +269,7 @@ async def fetch_manyacg():
     
     async with aiohttp.ClientSession() as session:
         # 🔴 循环 * 次，每次抽 1 张，总共 **1 张
-        for _ in range(8):
+        for _ in range(2):
             try:
                 async with session.get(url, headers=headers) as resp:
                     if resp.status != 200: continue  # 注意这里改成 continue，不要 return
@@ -315,7 +315,7 @@ async def fetch_manyacg():
                 logger.error(f"ManyACG 爬虫出错: {e}")
             
             # 每抽完一张，礼貌地等 1 秒再抽下一张
-            await asyncio.sleep(1)
+            await asyncio.sleep(60)
 
     if has_new_images:
         await push_history_to_cloud()
