@@ -268,8 +268,8 @@ async def fetch_manyacg():
     has_new_images = False
     
     async with aiohttp.ClientSession() as session:
-        # 🔴 循环 5 次，每次抽 1 张，总共 5 张
-        for _ in range(5):
+        # 🔴 循环 * 次，每次抽 1 张，总共 **1 张
+        for _ in range(8):
             try:
                 async with session.get(url, headers=headers) as resp:
                     if resp.status != 200: continue  # 注意这里改成 continue，不要 return
@@ -300,7 +300,7 @@ async def fetch_manyacg():
                         if not item.get('pictures'): continue
                         img_url = item['pictures'][0]['regular']
                         
-                        caption = f"ManyACG: {title}\nArtist: {author}\nTags: #{tags_str.replace(' ', ' #')}"
+                        caption = f"MtcACG: {title}\nArtist: {author}\nTags: #{tags_str.replace(' ', ' #')}"
                         
                         # --- 4. 下载并发送 ---
                         async with session.get(img_url) as img_r:
