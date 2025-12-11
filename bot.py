@@ -8,6 +8,8 @@ import aiohttp
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, BufferedInputFile
 from dotenv import load_dotenv
+from PIL import Image  # 🟢 新增导入
+import io              # 🟢 新增导入
 
 # 尝试导入 pixivpy3
 try:
@@ -35,7 +37,6 @@ BOT_TOKEN = get_env("BOT_TOKEN")
 CHANNEL_ID = get_env("CHANNEL_ID")
 
 # Worker 相关 (用于云端记忆)
-# 格式如: https://mtcacg.yourname.workers.dev
 WORKER_URL = get_env("WORKER_URL") 
 
 # Cloudflare D1
@@ -57,16 +58,16 @@ PIXIV_LIMIT = int(get_env("PIXIV_LIMIT", 3))
 # 🚀 启动检查
 # ===========================
 if not all([BOT_TOKEN, CHANNEL_ID, CF_ACCOUNT_ID, CF_API_TOKEN, D1_DB_ID]):
-    logger.error("❌ 致命错误：缺少核心环境变量 (BOT_TOKEN, CHANNEL_ID, CF_ACCOUNT_ID, CF_API_TOKEN, D1_DATABASE_ID)")
+    logger.error("❌ 致命错误：缺少核心环境变量")
     exit(1)
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # ===========================
-# 🧠 云端记忆模块 (新增)
+# 🧠 云端记忆模块
 # ===========================
-sent_illust_ids = set() # 内存里的已发送ID集合
+sent_illust_ids = set() 
 
 async def sync_history_from_cloud():
     """从 Worker 下载历史记录"""
@@ -78,7 +79,6 @@ async def sync_history_from_cloud():
                 if resp.status == 200:
                     text = await resp.text()
                     if text:
-                        # 假设 ID 用逗号分隔
                         ids = text.split(',')
                         sent_illust_ids = set(ids)
                         logger.info(f"🧠 已同步云端记忆，共 {len(sent_illust_ids)} 条记录。")
@@ -118,18 +118,31 @@ async def save_to_d1(post_id, file_id, caption, tags, source):
                 logger.error(f"❌ D1 写入失败: {await resp.text()}")
 
 async def process_image(img_bytes, post_id, tags, caption, source):
-    """统一处理流程：发TG -> 拿ID -> 存D1"""
+    """统一处理流程：压缩(如果需要) -> 发TG -> 拿ID -> 存D1"""
     try:
-        # 1. 包装图片
+        # --- 🟢 图片自动压缩逻辑 ---
+        # Telegram 限制图片最大 10MB
+        MAX_SIZE = 9.5 * 1024 * 1024  
+        
+        if len(img_bytes) > MAX_SIZE:
+            logger.info(f"⚠️ 图片过大 ({len(img_bytes)/1024/1024:.2f}MB)，正在压缩...")
+            with Image.open(io.BytesIO(img_bytes)) as img:
+                if img.mode != 'RGB': img = img.convert('RGB')
+                quality = 90
+                while True:
+                    output_buffer = io.BytesIO()
+                    img.save(output_buffer, format='JPEG', quality=quality)
+                    new_bytes = output_buffer.getvalue()
+                    if len(new_bytes) <= MAX_SIZE or quality <= 30:
+                        img_bytes = new_bytes
+                        logger.info(f"✅ 压缩完成: {len(img_bytes)/1024/1024:.2f}MB (Q:{quality})")
+                        break
+                    quality -= 10
+        # ---------------------------
+
         tg_file = BufferedInputFile(img_bytes, filename=f"{source}.jpg")
-        
-        # 2. 发送到存储频道
         msg = await bot.send_photo(chat_id=int(CHANNEL_ID), photo=tg_file, caption=caption)
-        
-        # 3. 提取最高清图片的 FileID
         file_id = msg.photo[-1].file_id
-        
-        # 4. 存库
         await save_to_d1(post_id, file_id, caption, tags, source)
         logger.info(f"✅ [{source}] 收录完成: {post_id}")
         
@@ -146,107 +159,72 @@ async def handle_manual_forward(message: Message):
         caption = message.caption or "Forwarded Image"
         post_id = f"manual_{message.message_id}"
         tags = "manual forwarded"
-        
         sent_msg = await bot.send_photo(chat_id=int(CHANNEL_ID), photo=file_id, caption=caption)
         final_file_id = sent_msg.photo[-1].file_id
-        
         await save_to_d1(post_id, final_file_id, caption, tags, "manual")
         await message.reply("✅ 图片已成功收录！")
-        
     except Exception as e:
         logger.error(f"手动转发处理出错: {e}")
         await message.reply("❌ 收录失败，请检查日志")
 
 # ===========================
-# 🕸️ 功能 2: Yande 爬虫 (已修复去重)
+# 🕸️ 功能 2: Yande 爬虫
 # ===========================
 async def fetch_yande():
     logger.info(f"🔍 检查 Yande ({YANDE_TAGS})...")
     url = f"https://yande.re/post.json?limit={YANDE_LIMIT}&tags={YANDE_TAGS}"
-    
-    # 标记本轮是否有新图 (用于触发最后上传云端)
     has_new_images = False 
-    
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
                 if resp.status != 200: return
                 posts = await resp.json()
-                
-                # Yande 的 API 是按时间倒序的（最新的在前面）
-                # 为了防止顺序错乱，我们通常可以倒序处理，或者直接遍历
                 for post in posts:
-                    # --- 1. ID 构造 ---
-                    # 必须和 Pixiv 保持不一样的格式前缀，防止 ID 撞车
-                    # 比如 Pixiv 是 "12345"，Yande 最好存成 "yande_12345"
                     yande_id_key = f"yande_{post['id']}"
-                    
-                    # --- 2. 去重检查 ---
                     if yande_id_key in sent_illust_ids:
                         logger.info(f"⏭️ Yande {post['id']} 以前发过，跳过。")
                         continue
 
                     img_url = post.get('sample_url') or post.get('file_url')
                     if not img_url: continue
-                    
-                    # 构造 D1 用的 ID (和上面的去重 Key 保持一致比较好管理)
                     pid = yande_id_key 
-                    
-                    # R18 检查
                     raw_tags = post.get('tags', '')
-                    if post.get('rating') == 'e':
-                        raw_tags += " R-18"
-
+                    if post.get('rating') == 'e': raw_tags += " R-18"
+                    
                     caption = f"Yande: {post['id']}\nTags: #{raw_tags.replace(' ', ' #')}"
                     
-                    # --- 3. 发送图片 ---
                     async with session.get(img_url) as r:
                         if r.status == 200:
-                            # 你的核心发送函数
                             await process_image(await r.read(), pid, raw_tags, caption, "yande")
-                            
-                            # --- 4. 成功后记录到内存 ---
                             sent_illust_ids.add(yande_id_key)
                             has_new_images = True
-                    
                     await asyncio.sleep(2)
     except Exception as e:
         logger.error(f"Yande 爬虫出错: {e}")
+    if has_new_images: await push_history_to_cloud()
 
-    # --- 5. 如果有新图，同步回 Cloudflare Worker ---
-    if has_new_images:
-        await push_history_to_cloud()
 # ===========================
-# 🎨 功能 3: Pixiv 爬虫 (带去重)
+# 🎨 功能 3: Pixiv 爬虫
 # ===========================
 async def fetch_pixiv_by_cookie(artist_ids):
-    """【Cookie 模式】模拟浏览器 API，不需要 Token"""
     logger.info("🍪 使用 Cookie 模式爬取 Pixiv...")
-    
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
         "Cookie": f"PHPSESSID={PIXIV_PHPSESSID}",
         "Referer": "https://www.pixiv.net/"
     }
-    
-    has_new_images = False # 标记本轮是否有新图
-    
+    has_new_images = False
     async with aiohttp.ClientSession(headers=headers) as session:
         for uid in artist_ids:
             try:
-                # 1. 获取画师作品列表
                 async with session.get(f"https://www.pixiv.net/ajax/user/{uid}/profile/all") as r:
                     data = await r.json()
                     if data['error']: 
                         logger.warning(f"Pixiv Cookie 失效或画师ID错误 (UID {uid})")
                         continue
-                    
-                    # 提取最新的 N 个 ID
                     ids = sorted(list(data['body']['illusts'].keys()), key=int, reverse=True)[:PIXIV_LIMIT]
                 
-                # 2. 遍历详情并下载
                 for pid in ids:
-                    # --- 去重检查 ---
                     if str(pid) in sent_illust_ids:
                         logger.info(f"⏭️ Pixiv {pid} 以前发过，跳过。")
                         continue
@@ -256,51 +234,31 @@ async def fetch_pixiv_by_cookie(artist_ids):
                         body = info['body']
                         title = body['illustTitle']
                         user = body['userName']
-                        tags = " ".join([t['tag'] for t in body['tags']['tags']])
+                        tags_list = [t['tag'] for t in body['tags']['tags']]
+                        if body.get('xRestrict', 0) > 0: tags_list.append("R-18")
+                        tags = " ".join(tags_list)
                         img_url = body['urls']['original']
                         
                         caption = f"Pixiv: {title}\nArtist: {user}\nTags: #{tags.replace(' ', ' #')}"
                         post_id = f"pixiv_{pid}"
                         
-                        # 下载原图
                         async with session.get(img_url) as img_r:
                             if img_r.status == 200:
                                 await process_image(await img_r.read(), post_id, tags, caption, "pixiv")
-                                
-                                # --- 标记为已发送 ---
                                 sent_illust_ids.add(str(pid))
                                 has_new_images = True
-                        
                         await asyncio.sleep(2)
             except Exception as e:
                 logger.error(f"Pixiv Cookie 爬取失败 (UID {uid}): {e}")
-    
-    # 如果有新图，更新云端记忆
-    if has_new_images:
-        await push_history_to_cloud()
+    if has_new_images: await push_history_to_cloud()
 
 async def fetch_pixiv():
-    # 1. Token 模式 (略，逻辑类似，但目前代码主要用 Cookie)
-    if HAS_PIXIV_LIB and PIXIV_REFRESH_TOKEN:
-        try:
-            logger.info("🔑 使用 Token 模式爬取 Pixiv...")
-            api = AppPixivAPI()
-            api.auth(refresh_token=PIXIV_REFRESH_TOKEN)
-            # (如果需要 Token 模式也去重，需要在这里加同样的逻辑)
-        except: pass
-    
-    # 2. 回退到 Cookie 模式
     if PIXIV_PHPSESSID and PIXIV_ARTIST_IDS:
         uids = [x.strip() for x in PIXIV_ARTIST_IDS.split(',') if x.strip()]
         await fetch_pixiv_by_cookie(uids)
 
-# ===========================
-# ⏱️ 调度器 & 主程序
-# ===========================
 async def scheduler():
-    # 启动时先同步一次记忆
     await sync_history_from_cloud()
-    
     while True:
         await fetch_yande()
         await fetch_pixiv()
